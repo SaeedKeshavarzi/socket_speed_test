@@ -1,2 +1,2 @@
 # socket_speed_test
-simple and cross-platform speed test tool for tcp &amp; udp
+simple cross-platform tcp &amp; udp speed test tool
