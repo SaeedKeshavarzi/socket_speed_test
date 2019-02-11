@@ -7,9 +7,6 @@
 #include <sstream>
 #include <fstream>
 
-#define For(i, n)	for( int (i) = 0; (i) < (n); ++(i) )
-#define FLUSH_OUT()	do { char ch; while (std::cin.readsome(&ch, 1) != 0); } while (0)
-
 class setting_t // virtual class
 {
 public:
@@ -206,11 +203,8 @@ template<typename _Tv>
 class scalar_t : public setting_t // bool, int, int64, double, float or string
 {
 	static_assert(
-		std::is_same<_Tv, bool>::value ||
-		std::is_same<_Tv, int>::value ||
-		std::is_same<_Tv, long long>::value ||
-		std::is_same<_Tv, double>::value ||
-		std::is_same<_Tv, float>::value ||
+		std::is_integral<_Tv>::value ||
+		std::is_floating_point<_Tv>::value ||
 		std::is_same<_Tv, std::string>::value,
 		"Invalid Type in Setting Scalar!");
 
@@ -274,26 +268,30 @@ public:
 	{
 		auto pfx = std::string(tab_level * 2, ' ');
 
-		if (suggest_current_value)
+		do
 		{
-			char ind; // indicator
-			do {
-				std::cout << pfx << label() << ": " << value_ << "; OK? (Yes: Press Enter|Edit: 'e' + Enter) " << std::flush;
-
-				FLUSH_OUT();
-				ind = tolower(getchar());
-				FLUSH_OUT();
-			} while ((ind != 10 /* Enter -> OK */) && (ind != 'e' /* -> Edit */));
-
-			if (ind == 10 /* Enter -> OK */)
+			if (suggest_current_value)
 			{
-				return;
-			}
-		}
+				char ind; // indicator
+				do {
+					std::cout << pfx << label() << ": " << value_ << "; OK? (Yes: Press Enter|Edit: 'e' + Enter) " << std::flush;
 
-		std::cout << pfx << label() << "? " << std::flush;
-		FLUSH_OUT();
-		read_value_t<my_value_type>::read(value_, std::cin);
+					do { char ch; while (std::cin.readsome(&ch, 1) != 0); } while (0); // FLUSH_OUT();
+					ind = tolower(getchar());
+					do { char ch; while (std::cin.readsome(&ch, 1) != 0); } while (0); // FLUSH_OUT();
+				} while ((ind != 10 /* Enter -> OK */) && (ind != 'e' /* -> Edit */));
+
+				if (ind == 10 /* Enter -> OK */)
+				{
+					return;
+				}
+			}
+
+			std::cout << pfx << label() << "? " << std::flush;
+			do { char ch; while (std::cin.readsome(&ch, 1) != 0); } while (0); // FLUSH_OUT();
+			read_value_t<my_value_type>::read(value_, std::cin);
+			suggest_current_value = true;
+		} while (true);
 	}
 
 	void print(std::ostream & ous = std::cout, int tab_level = 0) const
@@ -317,11 +315,8 @@ class vector_t : public setting_t // sequence of zero, one or most setting_t ite
 {
 	static_assert(
 		std::is_base_of<setting_t, _Tv>::value ||
-		std::is_same<_Tv, bool>::value ||
-		std::is_same<_Tv, int>::value ||
-		std::is_same<_Tv, long long>::value ||
-		std::is_same<_Tv, double>::value ||
-		std::is_same<_Tv, float>::value ||
+		std::is_integral<_Tv>::value ||
+		std::is_floating_point<_Tv>::value ||
 		std::is_same<_Tv, std::string>::value,
 		"Invalid Type in Setting Vector!");
 
@@ -367,7 +362,7 @@ public:
 		char buf[50];
 
 		vector_.resize(_size);
-		For(i, _size)
+		for (int i = 0; i < _size; ++i)
 		{
 			sprintf(buf, "%s[%2d]", label().c_str(), i + 1);
 			vector_[i].label() = buf;
@@ -378,43 +373,47 @@ public:
 	{
 		auto pfx = std::string(tab_level * 2, ' ');
 
-		if (suggest_current_value)
+		do
 		{
-			char ind; // indicator
-			do {
-				std::cout << pfx << label() << ": " << std::endl;
-				std::cout << pfx << "[ Count: " << size() << std::endl;
-				For(i, size())
-				{
-					vector_[i].print(std::cout, tab_level + (size() > 1 ? 1 : 0));
-				}
-				std::cout << pfx << "] OK? (Yes: Press Enter|Edit: 'e' + Enter) " << std::flush;
-
-				FLUSH_OUT();
-				ind = tolower(getchar());
-				FLUSH_OUT();
-			} while ((ind != 10 /* Enter -> OK */) && (ind != 'e' /* -> Edit */));
-
-			if (ind == 10 /* Enter -> OK */)
+			if (suggest_current_value)
 			{
-				return;
+				char ind; // indicator
+				do {
+					std::cout << pfx << label() << ": " << std::endl;
+					std::cout << pfx << "[ Count: " << size() << std::endl;
+					for (int i = 0; i < size(); ++i)
+					{
+						vector_[i].print(std::cout, tab_level + (size() > 1 ? 1 : 0));
+					}
+					std::cout << pfx << "] OK? (Yes: Press Enter|Edit: 'e' + Enter) " << std::flush;
+
+					do { char ch; while (std::cin.readsome(&ch, 1) != 0); } while (0); // FLUSH_OUT();
+					ind = tolower(getchar());
+					do { char ch; while (std::cin.readsome(&ch, 1) != 0); } while (0); // FLUSH_OUT();
+				} while ((ind != 10 /* Enter -> OK */) && (ind != 'e' /* -> Edit */));
+
+				if (ind == 10 /* Enter -> OK */)
+				{
+					return;
+				}
 			}
-		}
 
-		std::size_t old_size{ size() }, new_size;
+			std::size_t old_size{ size() }, new_size;
 
-		std::cout << pfx << label() << ": " << std::endl;
-		std::cout << pfx << "[ Count? " << std::flush;
+			std::cout << pfx << label() << ": " << std::endl;
+			std::cout << pfx << "[ Count? " << std::flush;
 
-		std::cin >> new_size;
-		resize(new_size);
+			std::cin >> new_size;
+			resize(new_size);
 
-		For(i, size())
-		{
-			vector_[i].scan((i < old_size) && suggest_current_value, tab_level + (size() > 1 ? 1 : 0));
-		}
+			for (int i = 0; i < size(); ++i)
+			{
+				vector_[i].scan((i < old_size) && suggest_current_value, tab_level + (size() > 1 ? 1 : 0));
+			}
 
-		std::cout << pfx << "] " << std::endl << std::flush;
+			std::cout << pfx << "] " << std::endl << std::flush;
+			suggest_current_value = true;
+		} while (true);
 	}
 
 	void print(std::ostream & ous = std::cout, int tab_level = 0) const
@@ -423,7 +422,7 @@ public:
 
 		ous << pfx << label() << ": " << std::endl;
 		ous << pfx << "[ Count: " << size() << std::endl;
-		For(i, size())
+		for (int i = 0; i < size(); ++i)
 		{
 			vector_[i].print(ous, tab_level + (size() > 1 ? 1 : 0));
 		}
@@ -441,7 +440,7 @@ public:
 		ins >> new_size;
 		resize(new_size);
 
-		For(i, size())
+		for (int i = 0; i < size(); ++i)
 		{
 			vector_[i].fread(ins);
 		}
@@ -474,38 +473,42 @@ public:
 	{
 		auto pfx = std::string(tab_level * 2, ' ');
 
-		if (suggest_current_value)
+		do
 		{
-			char ind; // indicator
-			do {
-				std::cout << pfx << label() << ": " << std::endl;
-				std::cout << pfx << "{ " << std::endl;
-				For(i, size())
-				{
-					operator()(i).print(std::cout, tab_level + (size() > 1 ? 1 : 0));
-				}
-				std::cout << pfx << "} OK? (Yes: Press Enter|Edit: 'e' + Enter) " << std::flush;
-
-				FLUSH_OUT();
-				ind = tolower(getchar());
-				FLUSH_OUT();
-			} while ((ind != 10 /* Enter -> OK */) && (ind != 'e' /* -> Edit */));
-
-			if (ind == 10 /* Enter -> OK */)
+			if (suggest_current_value)
 			{
-				return;
+				char ind; // indicator
+				do {
+					std::cout << pfx << label() << ": " << std::endl;
+					std::cout << pfx << "{ " << std::endl;
+					for (int i = 0; i < size(); ++i)
+					{
+						operator()(i).print(std::cout, tab_level + (size() > 1 ? 1 : 0));
+					}
+					std::cout << pfx << "} OK? (Yes: Press Enter|Edit: 'e' + Enter) " << std::flush;
+
+					do { char ch; while (std::cin.readsome(&ch, 1) != 0); } while (0); // FLUSH_OUT();
+					ind = tolower(getchar());
+					do { char ch; while (std::cin.readsome(&ch, 1) != 0); } while (0); // FLUSH_OUT();
+				} while ((ind != 10 /* Enter -> OK */) && (ind != 'e' /* -> Edit */));
+
+				if (ind == 10 /* Enter -> OK */)
+				{
+					return;
+				}
 			}
-		}
 
-		std::cout << pfx << label() << ": " << std::endl;
-		std::cout << pfx << "{ " << std::endl;
+			std::cout << pfx << label() << ": " << std::endl;
+			std::cout << pfx << "{ " << std::endl;
 
-		For(i, size())
-		{
-			operator()(i).scan(suggest_current_value, tab_level + (size() > 1 ? 1 : 0));
-		}
+			for (int i = 0; i < size(); ++i)
+			{
+				operator()(i).scan(suggest_current_value, tab_level + (size() > 1 ? 1 : 0));
+			}
 
-		std::cout << pfx << "} " << std::endl << std::flush;
+			std::cout << pfx << "} " << std::endl << std::flush;
+			suggest_current_value = true;
+		} while (true);
 	}
 
 	void print(std::ostream & ous = std::cout, int tab_level = 0) const
@@ -514,7 +517,7 @@ public:
 
 		ous << pfx << label() << ": " << std::endl;
 		ous << pfx << "{ " << std::endl;
-		For(i, size())
+		for (int i = 0; i < size(); ++i)
 		{
 			operator()(i).print(ous, tab_level + (size() > 1 ? 1 : 0));
 		}
@@ -526,7 +529,7 @@ public:
 		char c;
 		do { ins >> c; } while (c != ':');
 		do { ins >> c; } while (c != '{');
-		For(i, size())
+		for (int i = 0; i < size(); ++i)
 		{
 			operator()(i).fread(ins);
 		}

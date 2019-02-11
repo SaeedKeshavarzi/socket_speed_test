@@ -60,6 +60,7 @@ typedef int SOCKET;
 
 #endif
 
+
 #define INIT()		std::ios::sync_with_stdio(false); \
 					std::cin.tie(NULL); \
 					{ \
@@ -82,10 +83,10 @@ typedef int SOCKET;
 					GET_CHAR(); \
 					return n
 
-#define For(i, n)			for( int (i) = 0; (i) < (n); ++(i) )
-#define Forn(i, a, b)		for( int (i) = (a); (i) < (b); ++(i) )
-#define Fors(i, b, s)		for( int (i) = 0; (i) < (b); (i) += (s) )
-#define Forns(i, a, b, s)	for( int (i) = (a); (i) < (b); (i) += (s) )
+#define For(i, n)			for( std::remove_cv<std::remove_reference<decltype(n)>::type>::type (i) = (decltype(i))0; (i) < (n); ++(i) )
+#define Forn(i, a, b)		for( std::remove_cv<std::remove_reference<decltype(a)>::type>::type (i) = (a); (i) < (b); ++(i) )
+#define Fors(i, b, s)		for( std::remove_cv<std::remove_reference<decltype(b)>::type>::type (i) = (decltype(i))0; (i) < (b); (i) += (s) )
+#define Forns(i, a, b, s)	for( std::remove_cv<std::remove_reference<decltype(a)>::type>::type (i) = (a); (i) < (b); (i) += (s) )
 #define SET(t, v)			memset((t), (v), sizeof(t))
 
 #define MAX(x, y)		((x) > (y) ? (x) : (y))

@@ -20,7 +20,7 @@ std::atomic_int connection_cnt{ 0 };
 manual_reset_event ready{ false };
 manual_reset_event start{ false };
 
-void tx_test(int server_ind, int client_ind, int port_ind)
+static void tx_test(int server_ind, int client_ind, int port_ind)
 {
 	char * packet = new char[config.pack_len()];
 	int local_pack_cnt{ 0 };
@@ -30,21 +30,86 @@ void tx_test(int server_ind, int client_ind, int port_ind)
 		packet[i] = (char)(i % 125);
 	}
 
-	socket_t tcp_client;
-	auto ret = tcp_client.connect(
-		config.server(server_ind).client(client_ind).ip_address(),
-		config.server(server_ind).client(client_ind).port(port_ind),
-		config.server(server_ind).ip_address(),
-		config.server(server_ind).port(), ip_protocol_t::tcp);
+	socket_t client_socket;
+	auto ret = client_socket.create(
+		config.protocol() == speed_test_config_t::ip_protocol_t::tcp ? ip_protocol_t::tcp : ip_protocol_t::udp,
+		config.server(server_ind).client(client_ind).ip_address());
 
 	if (ret != 0)
 	{
-		printf("%dth port of %dth client of %dth server: 'connect' method failed! (Error Code: %d) \n",
+		printf("%dth port of %dth client of %dth server: 'create' method failed! (Error Code: %d) \n",
 			port_ind + 1, client_ind + 1, server_ind + 1, ret);
 
 		keep_on = false;
 	}
 	else
+	{
+		ret = client_socket.connect(config.server(server_ind).ip_address(), config.server(server_ind).port());
+
+		if (ret != 0)
+		{
+			printf("%dth port of %dth client of %dth server: 'connect' method failed! (Error Code: %d) \n",
+				port_ind + 1, client_ind + 1, server_ind + 1, ret);
+
+			keep_on = false;
+		}
+		else
+		{
+			if (connection_cnt.fetch_add(1) + 1 == n_socket)
+			{
+				ready.set();
+			}
+
+			start.wait();
+		}
+	}
+
+	while (keep_on)
+	{
+		*(int*)packet = (local_pack_cnt > (1 << 30) ? local_pack_cnt = 0 : local_pack_cnt++);
+
+		ret = client_socket.send(packet, config.pack_len());
+		if (ret != 0)
+		{
+			printf("packet %d send failed! (Error Code: %d) \n", *(int*)packet, ret);
+			keep_on = false;
+			break;
+		}
+
+		pack_cnt.fetch_add(1ll);
+	}
+
+	client_socket.close();
+	delete[] packet;
+}
+
+static void rx_test(socket_t & link, int server_ind, int client_ind, int port_ind)
+{
+	int ret{ 0 };
+	int local_pack_cnt{ 0 };
+	char * packet = new char[config.pack_len()];
+	char * ref_packet = new char[config.pack_len()];
+
+	Forn(i, 4, config.pack_len())
+	{
+		ref_packet[i] = (char)(i % 125);
+	}
+
+	if (config.protocol() == speed_test_config_t::ip_protocol_t::udp)
+	{
+		ret = link.create(ip_protocol_t::udp, config.server(server_ind).ip_address(), 
+			config.server(server_ind).port());
+
+		if (ret != 0)
+		{
+			printf("%dth port of %dth client of %dth server: 'create' method failed! (Error Code: %d) \n",
+				port_ind + 1, client_ind + 1, server_ind + 1, ret);
+
+			keep_on = false;
+		}
+	}
+
+	if (ret == 0)
 	{
 		if (connection_cnt.fetch_add(1) + 1 == n_socket)
 		{
@@ -56,42 +121,9 @@ void tx_test(int server_ind, int client_ind, int port_ind)
 
 	while (keep_on)
 	{
-		*(int*)packet = (local_pack_cnt > (1 << 30) ? local_pack_cnt = 0 : local_pack_cnt++);
-		pack_cnt.fetch_add(1ll);
-
-		ret = tcp_client.send(packet, config.pack_len());
-		if (ret != 0)
-		{
-			printf("packet %d send failed! (Error Code: %d) \n", *(int*)packet, ret);
-			keep_on = false;
-			break;
-		}
-	}
-
-	tcp_client.close();
-	delete[] packet;
-}
-
-void rx_test(int server_ind, int socket_ind)
-{
-	int ret;
-	int local_pack_cnt{ 0 };
-	char * packet = new char[config.pack_len()];
-	char * ref_packet = new char[config.pack_len()];
-
-	Forn(i, 4, config.pack_len())
-	{
-		ref_packet[i] = (char)(i % 125);
-	}
-
-	start.wait();
-
-	while (keep_on)
-	{
 		*(int*)ref_packet = (local_pack_cnt > (1 << 30) ? local_pack_cnt = 0 : local_pack_cnt++);
-		pack_cnt.fetch_add(1ll);
 
-		ret = connection[socket_ind].recv(packet, config.pack_len());
+		ret = link.recv(packet, config.pack_len());
 		if (ret != 0)
 		{
 			printf("%dth server %dth packet receive failed! (Error Code: %d) \n", server_ind + 1, *(int*)ref_packet, ret);
@@ -99,18 +131,37 @@ void rx_test(int server_ind, int socket_ind)
 			break;
 		}
 
-		if (memcmp(packet, ref_packet, config.pack_len()) != 0)
+		pack_cnt.fetch_add(1ll);
+
+		if (config.protocol() == speed_test_config_t::ip_protocol_t::tcp)
 		{
-			printf("%dth server %dth packet corrupted! \n", server_ind + 1, *(int*)ref_packet);
-			keep_on = false;
-			break;
+			if (memcmp(packet, ref_packet, config.pack_len()) != 0)
+			{
+				printf("%dth server %dth packet corrupted! \n", server_ind + 1, *(int*)ref_packet);
+				keep_on = false;
+				break;
+			}
 		}
 	}
 
-	connection[socket_ind].close();
+	link.close();
 
 	delete[] packet;
 	delete[] ref_packet;
+}
+
+static bool get_client_ind(const socket_t & link, const int server_ind, int & client_ind)
+{
+	For(i, config.server(server_ind).client_count())
+	{
+		if (link.pair_ip() == config.server(server_ind).client(i).ip_address())
+		{
+			client_ind = i;
+			return true;
+		}
+	}
+
+	return false;
 }
 
 int main()
@@ -119,6 +170,8 @@ int main()
 
 	config.scan(config.read_file(CONFIG_FILE_ADDRESS));
 	config.write_file(CONFIG_FILE_ADDRESS);
+
+	assert((config.protocol() == speed_test_config_t::ip_protocol_t::tcp) || (config.pack_len() <= 65507));
 
 	printf("\nestablishing connection... \n");
 
@@ -148,42 +201,73 @@ int main()
 	}
 	else if (config.mode() == speed_test_config_t::test_mode_t::rx)
 	{
-		server = new tcp_server_t[config.server_count()];
 		connection = new socket_t[n_socket];
 
-		for (int i{ 0 }, cnt{ 0 }; i < config.server_count(); ++i)
+		if (config.protocol() == speed_test_config_t::ip_protocol_t::tcp)
 		{
-			int ret = server[i].create(config.server(i).ip_address(), config.server(i).port());
-			if (ret != 0)
-			{
-				printf("%dth server 'create' method failed on (%s %d) (Error Code: %d) \n",
-					i + 1, config.server(i).ip_address().c_str(), config.server(i).port(), ret);
+			server = new tcp_server_t[config.server_count()];
 
-				keep_on = false;
-				break;
-			}
-
-			For(j, config.server(i).client_count())
+			for (int i{ 0 }, cnt{ 0 }; i < config.server_count(); ++i)
 			{
-				For(k, config.server(i).client(j).port_count())
+				int ret = server[i].create(config.server(i).ip_address(), config.server(i).port());
+				if (ret != 0)
 				{
-					int ret = server[i].listen(connection[cnt]);
-					if (ret != 0)
+					printf("%dth server 'create' method failed on (%s %d) (Error Code: %d) \n",
+						i + 1, config.server(i).ip_address().c_str(), config.server(i).port(), ret);
+
+					keep_on = false;
+					break;
+				}
+
+				for (int j = 0; keep_on && (j < config.server(i).client_count()); ++j)
+				{
+					int port_ind{ 0 };
+					for (int k = 0; keep_on && (k < config.server(i).client(j).port_count()); ++k)
 					{
-						printf("%d server 'listen' method failed on (%s %d) (Error Code: %d) \n",
-							i + 1, config.server(i).ip_address().c_str(), config.server(i).port(), ret);
+						while (keep_on)
+						{
+							int ret = server[i].listen(connection[cnt]);
+							if (ret != 0)
+							{
+								printf("%dth server 'listen' method failed on (%s %d) (Error Code: %d) \n",
+									i + 1, config.server(i).ip_address().c_str(), config.server(i).port(), ret);
 
-						keep_on = false;
-						break;
+								keep_on = false;
+								break;
+							}
+
+							int client_ind;
+							if (!get_client_ind(connection[cnt], i, client_ind))
+							{
+								printf("Unknown Client (%s, %d) \n", connection[cnt].pair_ip().c_str(), connection[cnt].pair_port());
+								connection[cnt].close();
+							}
+							else
+							{
+								threads[cnt] = std::thread(rx_test, std::ref(connection[cnt]), i, client_ind, port_ind);
+								++cnt;
+								++port_ind;
+								break;
+							}
+						}
 					}
-
-					threads[cnt] = std::thread(rx_test, i, cnt);
-					++cnt;
 				}
 			}
 		}
-
-		ready.set();
+		else
+		{
+			for (int i{ 0 }, cnt{ 0 }; i < config.server_count(); ++i)
+			{
+				for (int j = 0; keep_on && (j < config.server(i).client_count()); ++j)
+				{
+					for (int k = 0; keep_on && (k < config.server(i).client(j).port_count()); ++k)
+					{
+						threads[cnt] = std::thread(rx_test, std::ref(connection[cnt]), i, j, k);
+						++cnt;
+					}
+				}
+			}
+		}
 	}
 	else
 	{
@@ -234,12 +318,8 @@ int main()
 	}
 
 	delete[] threads;
-
-	if (config.mode() == speed_test_config_t::test_mode_t::rx)
-	{
-		delete[] server;
-		delete[] connection;
-	}
+	delete[] server;
+	delete[] connection;
 
 	FINISH(0);
 }

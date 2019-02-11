@@ -7,7 +7,7 @@ class client_config_t : public group_t
 {
 private:
 	scalar_t<std::string> ip_address_{ "IP Address" };
-	vector_t<int> port_{ "Port Number" };
+	scalar_t<int> port_count_{ "Port Count" };
 
 public:
 	std::size_t size() const
@@ -22,19 +22,17 @@ public:
 		case 0:
 			return ip_address_;
 		case 1:
-			return port_;
+			return port_count_;
 		default:
 			throw new std::invalid_argument("Invalid index!");
 		}
 	}
 
 	inline std::string ip_address() const { return ip_address_(); }
-	inline void ip_address(const std::string _client_address) { ip_address_() = _client_address; }
+	inline void ip_address(const std::string & _ip_address) { ip_address_() = _ip_address; }
 
-	inline std::size_t port_count() const { return port_.size(); }
-
-	inline int& port(int index) { return port_(index); }
-	inline const int& port(int index) const { return port_(index); }
+	inline int port_count() const { return port_count_(); }
+	inline void port_count(const int & _port_count) { port_count_() = _port_count; }
 };
 
 class server_config_t : public group_t
@@ -82,6 +80,12 @@ class speed_test_config_t : public group_t
 public:
 	speed_test_config_t(const std::string & _label = "Speed Test Config") : group_t(_label) {  }
 
+	enum class ip_protocol_t : int
+	{
+		tcp = 0,
+		udp
+	};
+
 	enum class test_mode_t : int
 	{
 		tx = 0,
@@ -90,7 +94,7 @@ public:
 
 	std::size_t size() const
 	{
-		return 3;
+		return 4;
 	}
 
 	const setting_t & operator()(int index) const
@@ -98,15 +102,20 @@ public:
 		switch (index)
 		{
 		case 0:
-			return pack_len_;
+			return protocol_;
 		case 1:
-			return mode_;
+			return pack_len_;
 		case 2:
+			return mode_;
+		case 3:
 			return server_;
 		default:
 			throw new std::invalid_argument("Invalid index!");
 		}
 	}
+
+	inline ip_protocol_t protocol() const { return (ip_protocol_t)protocol_(); }
+	inline void protocol(ip_protocol_t _protocol) { protocol_() = (int)_protocol; }
 
 	inline int pack_len() const { return pack_len_(); }
 	inline void pack_len(int _pack_len) { pack_len_() = _pack_len; }
@@ -120,6 +129,7 @@ public:
 	inline const server_config_t& server(int index) const { return server_(index); }
 
 private:
+	scalar_t<int> protocol_{ "Protocol (0: TCP, 1: UDP)" };
 	scalar_t<int> pack_len_{ "Packet Length" };
 	scalar_t<int> mode_{ "Mode (0: Tx, 1: Rx)" };
 	vector_t<server_config_t> server_{ "Server" };;
