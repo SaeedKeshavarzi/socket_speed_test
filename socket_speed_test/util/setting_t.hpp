@@ -1,129 +1,50 @@
-#ifndef _SETTING_T_HPP_
-#define _SETTING_T_HPP_
+#ifndef SETTING_T_HPP
+#define SETTING_T_HPP
 
 #include <exception>
+#include <algorithm>
 #include <assert.h>
 #include <iostream>
 #include <sstream>
 #include <fstream>
+#include <vector>
 
 class setting_t // virtual class
 {
 public:
-	enum class type_t : int
+	virtual ~setting_t() = default;
+	enum class type_t : int32_t
 	{
 		vt_none = 0,
-		// scalar types -> bool, int, int64, double, float or string
-		vt_bool,
-		vt_int,
-		vt_int64,
-		vt_double,
-		vt_float,
-		vt_string,
-		// aggregate types -> vector, list or group
+		// scalar types -> integral, floating point or string
+		vt_scalar,
+		// aggregate types -> vector or group
 		vt_vector, // sequence of zero, one or most setting_t item with same type
 		vt_group // sequence of zero, one or most setting_t item with different type
 	};
 
-	virtual const type_t value_type() const = 0;
+	virtual type_t value_type() const = 0;
 	inline const std::string & label() const { return label_; }
 	inline std::string & label() { return label_; }
 
-	// copy cast
-	virtual operator const bool() const {
-		assert(value_type() == type_t::vt_bool);
-		throw new std::invalid_argument("Not Implemented!");
+	inline bool enable() const
+	{
+		if (enable_callback_ == nullptr)
+		{
+			return true;
+		}
+
+		return enable_callback_(enable_callback_param_);
 	}
 
-	virtual operator const int() const {
-		assert(value_type() == type_t::vt_int);
-		throw new std::invalid_argument("Not Implemented!");
+	inline void set_enable_callback(bool(*_enable_callback)(void*), void * _enable_callback_param = nullptr)
+	{
+		enable_callback_param_ = _enable_callback_param;
+		enable_callback_ = _enable_callback;
 	}
 
-	virtual operator const long long() const {
-		assert((value_type() == type_t::vt_int) || (value_type() == type_t::vt_int64));
-		throw new std::invalid_argument("Not Implemented!");
-	}
-
-	virtual operator const double() const {
-		assert(value_type() == type_t::vt_double);
-		throw new std::invalid_argument("Not Implemented!");
-	}
-
-	virtual operator const float() const {
-		assert(value_type() == type_t::vt_float);
-		throw new std::invalid_argument("Not Implemented!");
-	}
-
-	virtual operator const std::string() const {
-		assert(value_type() == type_t::vt_string);
-		throw new std::invalid_argument("Not Implemented!");
-	}
-
-	// reference cast
-	virtual operator bool&() {
-		assert(value_type() == type_t::vt_bool);
-		throw new std::invalid_argument("Not Implemented!");
-	}
-
-	virtual operator int&() {
-		assert(value_type() == type_t::vt_int);
-		throw new std::invalid_argument("Not Implemented!");
-	}
-
-	virtual operator long long&() {
-		assert((value_type() == type_t::vt_int) || (value_type() == type_t::vt_int64));
-		throw new std::invalid_argument("Not Implemented!");
-	}
-
-	virtual operator double&() {
-		assert(value_type() == type_t::vt_double);
-		throw new std::invalid_argument("Not Implemented!");
-	}
-
-	virtual operator float&() {
-		assert(value_type() == type_t::vt_float);
-		throw new std::invalid_argument("Not Implemented!");
-	}
-
-	virtual operator std::string&() {
-		assert(value_type() == type_t::vt_string);
-		throw new std::invalid_argument("Not Implemented!");
-	}
-
-	// assign operator
-	virtual setting_t & operator=(bool value) {
-		assert(value_type() == type_t::vt_bool);
-		throw new std::invalid_argument("Not Implemented!");
-	}
-
-	virtual setting_t & operator=(int value) {
-		assert(value_type() == type_t::vt_int);
-		throw new std::invalid_argument("Not Implemented!");
-	}
-
-	virtual setting_t & operator=(long long value) {
-		assert(value_type() == type_t::vt_int64);
-		throw new std::invalid_argument("Not Implemented!");
-	}
-
-	virtual setting_t & operator=(double value) {
-		assert(value_type() == type_t::vt_double);
-		throw new std::invalid_argument("Not Implemented!");
-	}
-
-	virtual setting_t & operator=(float value) {
-		assert(value_type() == type_t::vt_float);
-		throw new std::invalid_argument("Not Implemented!");
-	}
-
-	virtual setting_t & operator=(std::string value) {
-		assert(value_type() == type_t::vt_string);
-		throw new std::invalid_argument("Not Implemented!");
-	}
-
-	virtual void scan(bool suggest_current_value = false, int tab_level = 0) = 0;
-	virtual void print(std::ostream & ous = std::cout, int tab_level = 0) const = 0;
+	virtual void scan(bool suggest_current_value = false, int32_t tab_level = 0, bool confirm = true) = 0;
+	virtual void print(std::ostream & ous = std::cout, int32_t tab_level = 0) const = 0;
 	virtual void fread(std::istream & ins) = 0;
 
 	bool read_file(const std::string & path)
@@ -183,6 +104,8 @@ protected:
 
 private:
 	std::string label_;
+	void * enable_callback_param_{ nullptr };
+	bool(*enable_callback_)(void*) { nullptr };
 
 	static std::string trim(const std::string & str)
 	{
@@ -200,7 +123,7 @@ private:
 };
 
 template<typename _Tv>
-class scalar_t : public setting_t // bool, int, int64, double, float or string
+class scalar_t : public setting_t // bool, int32_t, int64, double, float or string
 {
 	static_assert(
 		std::is_integral<_Tv>::value ||
@@ -215,27 +138,9 @@ public:
 	scalar_t(const std::string & _label = "") : setting_t(_label) {  }
 	scalar_t(const std::string & _label, my_value_type _value) : setting_t(_label), value_{ _value } {  }
 
-	const type_t value_type() const
+	type_t value_type() const
 	{
-		if (std::is_same<my_value_type, bool>::value)
-			return type_t::vt_bool;
-
-		if (std::is_same<my_value_type, int>::value)
-			return type_t::vt_int;
-
-		if (std::is_same<my_value_type, long long>::value)
-			return type_t::vt_int64;
-
-		if (std::is_same<my_value_type, double>::value)
-			return type_t::vt_double;
-
-		if (std::is_same<my_value_type, float>::value)
-			return type_t::vt_float;
-
-		if (std::is_same<my_value_type, std::string>::value)
-			return type_t::vt_string;
-
-		throw new std::invalid_argument("Invalid Type in Setting Scalar!");
+		return type_t::vt_scalar;
 	}
 
 	operator const my_value_type() const
@@ -264,9 +169,14 @@ public:
 		return value_;
 	}
 
-	void scan(bool suggest_current_value = false, int tab_level = 0)
+	void scan(bool suggest_current_value = false, int32_t tab_level = 0, bool confirm = false /* unused */)
 	{
-		auto pfx = std::string(tab_level * 2, ' ');
+		if (!enable())
+		{
+			return;
+		}
+
+		auto pfx = std::string((std::size_t)(tab_level * 2), ' ');
 
 		do
 		{
@@ -277,7 +187,7 @@ public:
 					std::cout << pfx << label() << ": " << value_ << "; OK? (Yes: Press Enter|Edit: 'e' + Enter) " << std::flush;
 
 					do { char ch; while (std::cin.readsome(&ch, 1) != 0); } while (0); // FLUSH_OUT();
-					ind = tolower(getchar());
+					ind = (char)tolower(getchar());
 					do { char ch; while (std::cin.readsome(&ch, 1) != 0); } while (0); // FLUSH_OUT();
 				} while ((ind != 10 /* Enter -> OK */) && (ind != 'e' /* -> Edit */));
 
@@ -290,17 +200,35 @@ public:
 			std::cout << pfx << label() << "? " << std::flush;
 			do { char ch; while (std::cin.readsome(&ch, 1) != 0); } while (0); // FLUSH_OUT();
 			read_value_t<my_value_type>::read(value_, std::cin);
-			suggest_current_value = true;
+
+			if (confirm)
+			{
+				suggest_current_value = true;
+			}
+			else
+			{
+				return;
+			}
 		} while (true);
 	}
 
-	void print(std::ostream & ous = std::cout, int tab_level = 0) const
+	void print(std::ostream & ous = std::cout, int32_t tab_level = 0) const
 	{
+		if (!enable())
+		{
+			return;
+		}
+
 		ous << std::string(tab_level * 2, ' ') << label() << ": " << value_ << std::endl << std::flush;
 	}
 
 	void fread(std::istream & ins)
 	{
+		if (!enable())
+		{
+			return;
+		}
+
 		char c;
 		do { ins >> c; } while (c != ':');
 		read_value_t<my_value_type>::read(value_, ins);
@@ -330,19 +258,19 @@ public:
 	using my_type = scalar_t<_Tv>;
 
 	vector_t(std::string _label = "") : setting_t(_label) { vector_.clear(); }
-	vector_t(std::string _label, int _size) : setting_t(_label) { resize(_size); }
+	vector_t(std::string _label, int32_t _size) : setting_t(_label) { resize(_size); }
 
-	const type_t value_type() const
+	type_t value_type() const
 	{
 		return type_t::vt_vector;
 	}
 
-	const my_value_type & operator()(int index) const
+	const my_value_type & operator()(std::size_t index) const
 	{
-		return (const my_value_type &)vector_[index];
+		return (const my_value_type&)vector_[index];
 	}
 
-	my_value_type & operator()(int index)
+	my_value_type & operator()(std::size_t index)
 	{
 		return vector_[index];
 	}
@@ -352,7 +280,7 @@ public:
 		return vector_.size();
 	}
 
-	void clear(const my_value_type & value)
+	void clear()
 	{
 		vector_.clear();
 	}
@@ -362,16 +290,21 @@ public:
 		char buf[50];
 
 		vector_.resize(_size);
-		for (int i = 0; i < _size; ++i)
+		for (std::size_t i = 0; i < _size; ++i)
 		{
-			sprintf(buf, "%s[%2d]", label().c_str(), i + 1);
+			sprintf(buf, "%s[%2llu]", label().c_str(), i + 1);
 			vector_[i].label() = buf;
 		}
 	}
 
-	void scan(bool suggest_current_value = false, int tab_level = 0)
+	void scan(bool suggest_current_value = false, int32_t tab_level = 0, bool confirm = true)
 	{
-		auto pfx = std::string(tab_level * 2, ' ');
+		if (!enable())
+		{
+			return;
+		}
+
+		auto pfx = std::string((std::size_t)(tab_level * 2), ' ');
 
 		do
 		{
@@ -381,14 +314,14 @@ public:
 				do {
 					std::cout << pfx << label() << ": " << std::endl;
 					std::cout << pfx << "[ Count: " << size() << std::endl;
-					for (int i = 0; i < size(); ++i)
+					for (int32_t i = 0; i < size(); ++i)
 					{
 						vector_[i].print(std::cout, tab_level + (size() > 1 ? 1 : 0));
 					}
 					std::cout << pfx << "] OK? (Yes: Press Enter|Edit: 'e' + Enter) " << std::flush;
 
 					do { char ch; while (std::cin.readsome(&ch, 1) != 0); } while (0); // FLUSH_OUT();
-					ind = tolower(getchar());
+					ind = (char)tolower(getchar());
 					do { char ch; while (std::cin.readsome(&ch, 1) != 0); } while (0); // FLUSH_OUT();
 				} while ((ind != 10 /* Enter -> OK */) && (ind != 'e' /* -> Edit */));
 
@@ -406,23 +339,43 @@ public:
 			std::cin >> new_size;
 			resize(new_size);
 
-			for (int i = 0; i < size(); ++i)
+			for (int32_t i = 0; i < size(); ++i)
 			{
-				vector_[i].scan((i < old_size) && suggest_current_value, tab_level + (size() > 1 ? 1 : 0));
+				vector_[i].scan((i < old_size) && suggest_current_value, tab_level + (size() > 1 ? 1 : 0), 
+					(size() > 1) && (vector_[i].value_type() != type_t::vt_scalar));
 			}
 
 			std::cout << pfx << "] " << std::endl << std::flush;
-			suggest_current_value = true;
+
+			if (confirm)
+			{
+				suggest_current_value = true;
+
+				for (int32_t i = 0; i < 8; ++i)
+				{
+					std::cout << "########";
+				}
+				std::cout << std::endl << std::flush;
+			}
+			else
+			{
+				return;
+			}
 		} while (true);
 	}
 
-	void print(std::ostream & ous = std::cout, int tab_level = 0) const
+	void print(std::ostream & ous = std::cout, int32_t tab_level = 0) const
 	{
-		auto pfx = std::string(tab_level * 2, ' ');
+		if (!enable())
+		{
+			return;
+		}
+
+		auto pfx = std::string((std::size_t)(tab_level * 2), ' ');
 
 		ous << pfx << label() << ": " << std::endl;
 		ous << pfx << "[ Count: " << size() << std::endl;
-		for (int i = 0; i < size(); ++i)
+		for (int32_t i = 0; i < size(); ++i)
 		{
 			vector_[i].print(ous, tab_level + (size() > 1 ? 1 : 0));
 		}
@@ -431,7 +384,12 @@ public:
 
 	void fread(std::istream & ins)
 	{
-		int new_size;
+		if (!enable())
+		{
+			return;
+		}
+
+		int32_t new_size;
 
 		char c;
 		do { ins >> c; } while (c != ':');
@@ -440,7 +398,7 @@ public:
 		ins >> new_size;
 		resize(new_size);
 
-		for (int i = 0; i < size(); ++i)
+		for (int32_t i = 0; i < size(); ++i)
 		{
 			vector_[i].fread(ins);
 		}
@@ -455,23 +413,28 @@ class group_t : public setting_t // <virtual class> sequence of zero, one or mos
 public:
 	group_t(const std::string & _label = "") : setting_t(_label) {  }
 
-	const type_t value_type() const
+	type_t value_type() const
 	{
 		return type_t::vt_group;
 	}
 
 	virtual std::size_t size() const = 0;
 
-	virtual const setting_t & operator()(int index) const = 0;
+	virtual const setting_t & operator()(std::size_t index) const = 0;
 
-	virtual setting_t & operator()(int index)
+	virtual setting_t & operator()(std::size_t index)
 	{
 		return const_cast<setting_t &>((static_cast<const group_t&>(*this)).operator()(index));
 	}
 
-	void scan(bool suggest_current_value = false, int tab_level = 0)
+	void scan(bool suggest_current_value = false, int32_t tab_level = 0, bool confirm = true)
 	{
-		auto pfx = std::string(tab_level * 2, ' ');
+		if (!enable())
+		{
+			return;
+		}
+
+		auto pfx = std::string((std::size_t)(tab_level * 2), ' ');
 
 		do
 		{
@@ -481,14 +444,14 @@ public:
 				do {
 					std::cout << pfx << label() << ": " << std::endl;
 					std::cout << pfx << "{ " << std::endl;
-					for (int i = 0; i < size(); ++i)
+					for (std::size_t i = 0; i < size(); ++i)
 					{
 						operator()(i).print(std::cout, tab_level + (size() > 1 ? 1 : 0));
 					}
 					std::cout << pfx << "} OK? (Yes: Press Enter|Edit: 'e' + Enter) " << std::flush;
 
 					do { char ch; while (std::cin.readsome(&ch, 1) != 0); } while (0); // FLUSH_OUT();
-					ind = tolower(getchar());
+					ind = (char)tolower(getchar());
 					do { char ch; while (std::cin.readsome(&ch, 1) != 0); } while (0); // FLUSH_OUT();
 				} while ((ind != 10 /* Enter -> OK */) && (ind != 'e' /* -> Edit */));
 
@@ -501,23 +464,43 @@ public:
 			std::cout << pfx << label() << ": " << std::endl;
 			std::cout << pfx << "{ " << std::endl;
 
-			for (int i = 0; i < size(); ++i)
+			for (std::size_t i = 0; i < size(); ++i)
 			{
-				operator()(i).scan(suggest_current_value, tab_level + (size() > 1 ? 1 : 0));
+				operator()(i).scan(suggest_current_value, tab_level + (size() > 1 ? 1 : 0), 
+					(size() > 1) && (operator()(i).value_type() != type_t::vt_scalar));
 			}
 
 			std::cout << pfx << "} " << std::endl << std::flush;
-			suggest_current_value = true;
+
+			if (confirm)
+			{
+				suggest_current_value = true;
+
+				for (int32_t i = 0; i < 8; ++i)
+				{
+					std::cout << "########";
+				}
+				std::cout << std::endl << std::flush;
+			}
+			else
+			{
+				return;
+			}
 		} while (true);
 	}
 
-	void print(std::ostream & ous = std::cout, int tab_level = 0) const
+	void print(std::ostream & ous = std::cout, int32_t tab_level = 0) const
 	{
-		auto pfx = std::string(tab_level * 2, ' ');
+		if (!enable())
+		{
+			return;
+		}
+
+		auto pfx = std::string((std::size_t)(tab_level * 2), ' ');
 
 		ous << pfx << label() << ": " << std::endl;
 		ous << pfx << "{ " << std::endl;
-		for (int i = 0; i < size(); ++i)
+		for (std::size_t i = 0; i < size(); ++i)
 		{
 			operator()(i).print(ous, tab_level + (size() > 1 ? 1 : 0));
 		}
@@ -526,14 +509,19 @@ public:
 
 	void fread(std::istream & ins)
 	{
+		if (!enable())
+		{
+			return;
+		}
+
 		char c;
 		do { ins >> c; } while (c != ':');
 		do { ins >> c; } while (c != '{');
-		for (int i = 0; i < size(); ++i)
+		for (std::size_t i = 0; i < size(); ++i)
 		{
 			operator()(i).fread(ins);
 		}
 	}
 };
 
-#endif // !_SETTING_T_HPP_
+#endif // !SETTING_T_HPP

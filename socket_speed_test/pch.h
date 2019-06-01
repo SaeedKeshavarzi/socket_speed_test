@@ -35,32 +35,6 @@
 #include <algorithm>
 #include <experimental/filesystem>
 
-#ifdef __linux__
-
-#	include <netinet/in.h>
-#	include <arpa/inet.h>
-#	include <sys/socket.h>
-#	include <sys/types.h>
-#	include <unistd.h>
-#	include <errno.h>
-
-typedef int SOCKET;
-
-#	define INVALID_SOCKET   (SOCKET)(~0)
-#	define SOCKET_ERROR     (-1)
-
-#else
-
-#	define _WINSOCK_DEPRECATED_NO_WARNINGS
-
-#	include <WinSock2.h>
-#	include <iphlpapi.h>
-#	pragma comment(lib, "IPHLPAPI.lib")
-#	pragma comment(lib, "ws2_32.lib")
-
-#endif
-
-
 #define INIT()		std::ios::sync_with_stdio(false); \
 					std::cin.tie(NULL); \
 					{ \
@@ -100,10 +74,10 @@ typedef int SOCKET;
 
 #pragma comment(linker, "/STACK:200000000")
 
-//      signed int					// -2e9  to 2e9   // (-2147483648)          - (2147483647)           // %d		// auto n = 1;		// int
-typedef unsigned int		uint;	// 0     to 4e9   // (0)                    - (4294967295)           // %u		// auto n = 1u;		// unsigned int
-typedef signed long long	int64;	// -9e18 to 9e18  // (-9223372036854775808) - (9223372036854775807)  // %I64d	// auto n = 1ll;	// long long
-typedef unsigned long long	uint64;	// 0     to 18e18 // (0)                    - (18446744073709551615) // %I64u	// auto n = 1llu;	// unsigned long long
+//      signed int					// -2e9  to 2e9   // (-2147483648)          - (2147483647)           // %ld		// auto n = 1;		// int
+typedef unsigned int		uint;	// 0     to 4e9   // (0)                    - (4294967295)           // %lu		// auto n = 1u;		// unsigned int
+typedef signed long long	int64;	// -9e18 to 9e18  // (-9223372036854775808) - (9223372036854775807)  // %lld	// auto n = 1ll;	// long long
+typedef unsigned long long	uint64;	// 0     to 18e18 // (0)                    - (18446744073709551615) // %llu	// auto n = 1llu;	// unsigned long long
 typedef std::vector<int>	VI;
 typedef std::pair<int, int>	PII;
 

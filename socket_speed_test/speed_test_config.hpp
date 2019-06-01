@@ -15,7 +15,7 @@ public:
 		return 2;
 	}
 
-	const setting_t & operator()(int index) const
+	const setting_t & operator()(std::size_t index) const
 	{
 		switch (index)
 		{
@@ -48,7 +48,7 @@ public:
 		return 3;
 	}
 
-	const setting_t & operator()(int index) const
+	const setting_t & operator()(std::size_t index) const
 	{
 		switch (index)
 		{
@@ -97,7 +97,7 @@ public:
 		return 4;
 	}
 
-	const setting_t & operator()(int index) const
+	const setting_t & operator()(std::size_t index) const
 	{
 		switch (index)
 		{
