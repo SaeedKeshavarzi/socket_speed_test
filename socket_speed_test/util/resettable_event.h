@@ -39,12 +39,12 @@ public:
 
 	virtual inline void wait() = 0;
 
-	inline bool wait_for(const std::chrono::milliseconds& rel_time)
-	{
-		return this->wait_until(std::chrono::steady_clock::now() + rel_time);
-	}
-
 	virtual inline bool wait_until(const std::chrono::time_point<std::chrono::steady_clock>& /*timeout_time*/) = 0;
+
+    inline bool wait_for(const std::chrono::milliseconds& rel_time)
+    {
+        return this->wait_until(std::chrono::steady_clock::now() + rel_time);
+    }
 };
 
 class manual_reset_event : public resettable_event

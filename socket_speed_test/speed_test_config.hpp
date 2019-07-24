@@ -7,7 +7,7 @@ class client_config_t : public group_t
 {
 private:
 	scalar_t<std::string> ip_address_{ "IP Address" };
-	scalar_t<int> port_count_{ "Port Count" };
+	scalar_t<std::size_t> port_count_{ "Port Count" };
 
 public:
 	std::size_t size() const
@@ -31,8 +31,8 @@ public:
 	inline std::string ip_address() const { return ip_address_(); }
 	inline void ip_address(const std::string & _ip_address) { ip_address_() = _ip_address; }
 
-	inline int port_count() const { return port_count_(); }
-	inline void port_count(const int & _port_count) { port_count_() = _port_count; }
+	inline std::size_t port_count() const { return port_count_(); }
+	inline void port_count(const std::size_t & _port_count) { port_count_() = _port_count; }
 };
 
 class server_config_t : public group_t
@@ -40,7 +40,7 @@ class server_config_t : public group_t
 private:
 	scalar_t<std::string> ip_address_{ "IP Address" };
 	scalar_t<int> port_{ "Port Number" };
-	vector_t<client_config_t> client_{ "Client" };;
+	vector_t<client_config_t> client_{ "Client" };
 
 public:
 	std::size_t size() const
@@ -71,8 +71,8 @@ public:
 
 	inline std::size_t client_count() const { return client_.size(); }
 
-	inline client_config_t& client(int index) { return client_(index); }
-	inline const client_config_t& client(int index) const { return client_(index); }
+	inline client_config_t& client(std::size_t index) { return client_(index); }
+	inline const client_config_t& client(std::size_t index) const { return client_(index); }
 };
 
 class speed_test_config_t : public group_t

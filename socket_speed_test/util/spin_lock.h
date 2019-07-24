@@ -6,7 +6,7 @@
 class spin_lock
 {
 private:
-	std::atomic_flag flag{ ATOMIC_FLAG_INIT };
+	std::atomic_flag flag = ATOMIC_FLAG_INIT;
 
 public:
 	spin_lock() = default;
