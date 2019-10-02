@@ -16,8 +16,8 @@ static std::size_t n_socket{ 0 };
 static bool keep_on{ true };
 static std::atomic_llong pack_cnt{ 0 };
 static std::atomic_int connection_cnt{ 0 };
-static manual_reset_event ready{ false };
-static manual_reset_event start{ false };
+static resettable_event<false> ready{ false };
+static resettable_event<false> start{ false };
 
 static socket_t * connection{ nullptr };
 
@@ -99,7 +99,7 @@ int main()
 					{
 						while (keep_on)
 						{
-							int ret = server.listen(connection[cnt], n_socket);
+							int ret = server.listen(connection[cnt], (int)n_socket);
 							if (ret != 0)
 							{
 								printf("%llu server 'listen' method failed on (%s %d) (Error Code: %d) \n",
@@ -266,7 +266,7 @@ static void rx_test(socket_t & link, std::size_t server_ind, std::size_t client_
 
 			if (ret != 0)
 			{
-				printf("%dth port of %dth client of %dth server: 'create' method failed! (Error Code: %d) \n",
+				printf("%lluth port of %lluth client of %lluth server: 'create' method failed! (Error Code: %d) \n",
 					port_ind + 1, client_ind + 1, server_ind + 1, ret);
 
 				std::this_thread::sleep_for(milliseconds(750));
@@ -305,7 +305,7 @@ static void rx_test(socket_t & link, std::size_t server_ind, std::size_t client_
 		{
 			if (*(int32_t*)packet != (local_pack_cnt > (1 << 30) ? local_pack_cnt = 0 : local_pack_cnt)++)
 			{
-				printf("%dth server %dth packet corrupted! \n", server_ind + 1, local_pack_cnt - 1);
+				printf("%lluth server %dth packet corrupted! \n", server_ind + 1, local_pack_cnt - 1);
 				keep_on = false;
 				break;
 			}

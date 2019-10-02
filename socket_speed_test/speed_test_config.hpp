@@ -125,8 +125,8 @@ public:
 
 	inline std::size_t server_count() const { return server_.size(); }
 
-	inline server_config_t& server(int index) { return server_(index); }
-	inline const server_config_t& server(int index) const { return server_(index); }
+	inline server_config_t& server(const std::size_t & index) { return server_(index); }
+	inline const server_config_t& server(const std::size_t & index) const { return server_(index); }
 
 private:
 	scalar_t<int> protocol_{ "Protocol (0: TCP, 1: UDP)" };

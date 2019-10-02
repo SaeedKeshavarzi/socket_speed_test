@@ -19,7 +19,6 @@ PRECOMPILED_HEADER = pch.h
 HEADERS += \
     util/resettable_event.h \
     util/setting_t.hpp \
-    util/spin_lock.h \
     util/sockio.h \
     speed_test_config.hpp \
     pch.h

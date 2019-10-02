@@ -1,5 +1,5 @@
-#ifndef SETTING_T_HPP
-#define SETTING_T_HPP
+#ifndef _SETTING_T_HPP_
+#define _SETTING_T_HPP_
 
 #include <exception>
 #include <algorithm>
@@ -524,4 +524,4 @@ public:
 	}
 };
 
-#endif // !SETTING_T_HPP
+#endif // !_SETTING_T_HPP_

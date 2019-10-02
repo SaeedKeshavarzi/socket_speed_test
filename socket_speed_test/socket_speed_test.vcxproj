@@ -92,7 +92,6 @@
     <ClInclude Include="util\resettable_event.h" />
     <ClInclude Include="util\setting_t.hpp" />
     <ClInclude Include="util\sockio.h" />
-    <ClInclude Include="util\spin_lock.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

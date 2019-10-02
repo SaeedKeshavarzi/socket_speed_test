@@ -1,118 +1,121 @@
 #ifndef _RESETTABLE_EVENT_H_
 #define _RESETTABLE_EVENT_H_
 
-#include <condition_variable>
+#include <mutex>
 #include <atomic>
+#include <type_traits>
+#include <condition_variable>
 
-#include "spin_lock.h"
-
+template<bool _AutoReset>
 class resettable_event
 {
-protected:
-	std::condition_variable_any cv;
-	std::atomic<bool> state;
-	spin_lock sync;
-
 public:
-	resettable_event(const bool initial_state) : state{ initial_state } { }
+    static constexpr bool is_auto = _AutoReset;
 
-	inline bool is_set() const
-	{
-		return state.load();
-	}
+    resettable_event(const resettable_event&) = delete;
+    resettable_event& operator=(const resettable_event&) = delete;
 
-	inline void set()
-	{
-		std::lock_guard<spin_lock> lock(sync);
+    resettable_event(const bool initial_state = false) :
+        state{ initial_state }
+    { }
 
-		if (!state.exchange(true))
-		{
-			cv.notify_all();
-		}
-	}
-
-	inline void reset()
-	{
-		std::lock_guard<spin_lock> lock(sync);
-		state = false;
-	}
-
-	virtual inline void wait() = 0;
-
-	virtual inline bool wait_until(const std::chrono::time_point<std::chrono::steady_clock>& /*timeout_time*/) = 0;
-
-    inline bool wait_for(const std::chrono::milliseconds& rel_time)
+    inline bool is_set() const
     {
-        return this->wait_until(std::chrono::steady_clock::now() + rel_time);
+        return state.load();
     }
-};
 
-class manual_reset_event : public resettable_event
-{
-public:
-	manual_reset_event(const manual_reset_event&) = delete;
-	manual_reset_event& operator=(const manual_reset_event&) = delete;
+    inline void set()
+    {
+        std::lock_guard<std::mutex> lock(guard);
 
-	explicit manual_reset_event(const bool initial_state = false) : resettable_event{ initial_state } { }
+        if (!state.exchange(true))
+            cv.notify_all();
+    }
 
-	inline void wait()
-	{
-		std::unique_lock<spin_lock> lock(sync);
+    inline void reset()
+    {
+        std::lock_guard<std::mutex> lock(guard);
+        state = false;
+    }
 
-		while (!state.load())
-		{
-			cv.wait(lock);
-		}
-	}
+    template<typename = std::enable_if_t<!is_auto, bool>>
+    inline void wait() const
+    {
+        std::unique_lock<std::mutex> lock(guard);
 
-	inline bool wait_until(const std::chrono::time_point<std::chrono::steady_clock>& timeout_time)
-	{
-		std::unique_lock<spin_lock> lock(sync);
+        while (!state.load())
+            cv.wait(lock);
+    }
 
-		while (!state.load())
-		{
-			if (cv.wait_until(lock, timeout_time) == std::cv_status::timeout)
-			{
-				return state.load();
-			}
-		}
+    template<class _Rep, class _Period, typename = std::enable_if_t<!is_auto, bool>>
+    inline bool wait_for(const std::chrono::duration<_Rep, _Period> & rel_time)  const
+    {
+        std::unique_lock<std::mutex> lock(guard);
 
-		return true;
-	}
-};
+        while (!state.load())
+        {
+            if (cv.wait_for(lock, rel_time) == std::cv_status::timeout)
+                return state.load();
+        }
 
-class auto_reset_event : public resettable_event
-{
-public:
-	auto_reset_event(const auto_reset_event&) = delete;
-	auto_reset_event& operator=(const auto_reset_event&) = delete;
+        return true;
+    }
 
-	explicit auto_reset_event(const bool initial_state = false) : resettable_event{ initial_state } { }
+    template<class _Clock, class _Duration, typename = std::enable_if_t<!is_auto, bool>>
+    inline bool wait_until(const std::chrono::time_point<_Clock, _Duration> & timeout_time)  const
+    {
+        std::unique_lock<std::mutex> lock(guard);
 
-	inline void wait()
-	{
-		std::unique_lock<spin_lock> lock(sync);
+        while (!state.load())
+        {
+            if (cv.wait_until(lock, timeout_time) == std::cv_status::timeout)
+                return state.load();
+        }
 
-		while (!state.exchange(false))
-		{
-			cv.wait(lock);
-		}
-	}
+        return true;
+    }
 
-	inline bool wait_until(const std::chrono::time_point<std::chrono::steady_clock>& timeout_time)
-	{
-		std::unique_lock<spin_lock> lock(sync);
+    template<typename = std::enable_if_t<is_auto, bool>>
+    inline void wait()
+    {
+        std::unique_lock<std::mutex> lock(guard);
 
-		while (!state.exchange(false))
-		{
-			if (cv.wait_until(lock, timeout_time) == std::cv_status::timeout)
-			{
-				return state.exchange(false);
-			}
-		}
+        while (!state.exchange(false))
+            cv.wait(lock);
+    }
 
-		return true;
-	}
+    template<class _Rep, class _Period, typename = std::enable_if_t<is_auto, bool>>
+    inline bool wait_for(const std::chrono::duration<_Rep, _Period> & rel_time)
+    {
+        std::unique_lock<std::mutex> lock(guard);
+
+        while (!state.exchange(false))
+        {
+            if (cv.wait_for(lock, rel_time) == std::cv_status::timeout)
+                return state.exchange(false);
+        }
+
+        return true;
+    }
+
+    template<class _Clock, class _Duration, typename = std::enable_if_t<is_auto, bool>>
+    inline bool wait_until(const std::chrono::time_point<_Clock, _Duration> & timeout_time)
+    {
+        std::unique_lock<std::mutex> lock(guard);
+
+        while (!state.exchange(false))
+        {
+            if (cv.wait_until(lock, timeout_time) == std::cv_status::timeout)
+                return state.exchange(false);
+        }
+
+        return true;
+    }
+
+protected:
+    std::atomic_bool state;
+    mutable std::mutex guard;
+    mutable std::condition_variable cv;
 };
 
 #endif // !_RESETTABLE_EVENT_H_
