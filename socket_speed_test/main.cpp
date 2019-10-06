@@ -8,10 +8,11 @@
 #define CONFIG_FILE_ADDRESS "./../speed_test_config.cfg"
 
 using namespace std::chrono;
+using namespace std::literals::chrono_literals;
 
 static speed_test_config_t config{ "Test Config" };
 static std::thread * threads;
-static std::size_t n_socket{ 0 };
+static std::size_t n_connection{ 0 };
 
 static bool keep_on{ true };
 static std::atomic_llong pack_cnt{ 0 };
@@ -25,9 +26,9 @@ static void tx_start();
 static void rx_udp_start();
 static void rx_tcp_start();
 
-static void tx_core(std::size_t server_ind, std::size_t client_ind, std::size_t port_ind, std::size_t link_ind);
-static void rx_core(socket_t & link, std::size_t server_ind, std::size_t client_ind, std::size_t port_ind, std::size_t link_ind);
-static bool get_client_ind(const socket_t & link, const std::size_t server_ind, std::size_t & client_ind);
+static void tx_core(std::size_t server_id, std::size_t client_id, std::size_t port_id, std::size_t link_id);
+static void rx_core(socket_t & link, std::size_t server_id, std::size_t client_id, std::size_t port_id, std::size_t link_id);
+static bool get_client_id(const socket_t & link, const std::size_t server_id, std::size_t & client_id);
 
 int main()
 {
@@ -38,16 +39,16 @@ int main()
 
 	assert((config.protocol() == speed_test_config_t::ip_protocol_t::tcp) || (config.pack_len() <= MAX_UDP_PACKET_SIZE));
 
-	For(i, config.server_count())
+	For(srv_id, config.server_count())
 	{
-		For(j, config.server(i).client_count())
-			n_socket += config.server(i).client(j).port_count();
+		For(cli_id, config.server(srv_id).client_count())
+			n_connection += config.server(srv_id).client(cli_id).port_count();
 	}
 
 	printf("\nestablishing connection... \n");
 
-	threads = new std::thread[n_socket];
-	connection = new socket_t[n_socket];
+	threads = new std::thread[n_connection];
+	connection = new socket_t[n_connection];
 
 	if (config.mode() == speed_test_config_t::test_mode_t::tx)
 		tx_start();
@@ -70,7 +71,7 @@ int main()
 	std::thread wait_for_user_thread = std::thread([](bool & keep_on)
 	{
 		if (keep_on)
-			std::this_thread::sleep_for(milliseconds(1500));
+			std::this_thread::sleep_for(1500ms);
 
 		printf("press enter to exit... \n\n");
 		GET_CHAR();
@@ -82,7 +83,7 @@ int main()
 
 	while (keep_on)
 	{
-		std::this_thread::sleep_for(milliseconds(2500));
+		std::this_thread::sleep_for(2500ms);
 		if (!keep_on)
 			break;
 
@@ -95,13 +96,13 @@ int main()
 
 	wait_for_user_thread.join();
 
-	For(i, n_socket)
-		connection[i].close();
+	For(con_id, n_connection)
+		connection[con_id].close();
 
-	For(i, n_socket)
+	For(con_id, n_connection)
 	{
-		if (threads[i].joinable())
-			threads[i].join();
+		if (threads[con_id].joinable())
+			threads[con_id].join();
 	}
 
 	delete[] threads;
@@ -112,16 +113,16 @@ int main()
 
 static void tx_start()
 {
-	std::size_t cnt{ 0 };
+	std::size_t con_id{ 0 };
 
-	For(i, config.server_count())
+	For(srv_id, config.server_count())
 	{
-		For(j, config.server(i).client_count())
+		For(cli_id, config.server(srv_id).client_count())
 		{
-			For(k, config.server(i).client(j).port_count())
+			For(prt_id, config.server(srv_id).client(cli_id).port_count())
 			{
-				threads[cnt] = std::thread(tx_core, i, j, k, cnt);
-				++cnt;
+				threads[con_id] = std::thread(tx_core, srv_id, cli_id, prt_id, con_id);
+				++con_id;
 			}
 		}
 	}
@@ -129,16 +130,16 @@ static void tx_start()
 
 static void rx_udp_start()
 {
-	std::size_t cnt{ 0 };
+	std::size_t con_id{ 0 };
 
-	For(i, config.server_count())
+	For(srv_id, config.server_count())
 	{
-		For(j, config.server(i).client_count())
+		For(cli_id, config.server(srv_id).client_count())
 		{
-			For(k, config.server(i).client(j).port_count())
+			For(prt_id, config.server(srv_id).client(cli_id).port_count())
 			{
-				threads[cnt] = std::thread(rx_core, std::ref(connection[cnt]), i, j, k, cnt);
-				++cnt;
+				threads[con_id] = std::thread(rx_core, std::ref(connection[con_id]), srv_id, cli_id, prt_id, con_id);
+				++con_id;
 			}
 		}
 	}
@@ -148,23 +149,23 @@ static void rx_tcp_start()
 {
 	std::size_t cnt{ 0 };
 
-	For(i, config.server_count())
+	For(srv_id, config.server_count())
 	{
 		tcp_server_t server;
-		int ret = server.create(config.server(i).ip_address(), (uint16_t)config.server(i).port());
+		int ret = server.create(config.server(srv_id).ip_address(), (uint16_t)config.server(srv_id).port());
 		if (ret != 0)
 		{
 			printf("%lluth server 'create' method failed on (%s %d) (Error Code: %d) \n",
-				i + 1, config.server(i).ip_address().c_str(), config.server(i).port(), ret);
+				srv_id + 1, config.server(srv_id).ip_address().c_str(), config.server(srv_id).port(), ret);
 
 			keep_on = false;
 			break;
 		}
 
-		For(j, config.server(i).client_count())
+		For(cli_id, config.server(srv_id).client_count())
 		{
-			std::size_t port_ind{ 0 };
-			For(k, config.server(i).client(j).port_count())
+			std::size_t port_id{ 0 };
+			For(prt_id, config.server(srv_id).client(cli_id).port_count())
 			{
 				while (keep_on)
 				{
@@ -172,23 +173,23 @@ static void rx_tcp_start()
 					if (ret != 0)
 					{
 						printf("%llu server 'listen' method failed on (%s %d) (Error Code: %d) \n",
-							i + 1, config.server(i).ip_address().c_str(), config.server(i).port(), ret);
+							srv_id + 1, config.server(srv_id).ip_address().c_str(), config.server(srv_id).port(), ret);
 
 						keep_on = false;
 						break;
 					}
 
-					std::size_t client_ind;
-					if (!get_client_ind(connection[cnt], i, client_ind))
+					std::size_t client_id;
+					if (!get_client_id(connection[cnt], srv_id, client_id))
 					{
 						printf("Unknown Client (%s, %d) \n", connection[cnt].pair_ip().c_str(), connection[cnt].pair_port());
 						connection[cnt].close();
 					}
 					else
 					{
-						threads[cnt] = std::thread(rx_core, std::ref(connection[cnt]), i, client_ind, port_ind, cnt);
+						threads[cnt] = std::thread(rx_core, std::ref(connection[cnt]), srv_id, client_id, port_id, cnt);
 						++cnt;
-						++port_ind;
+						++port_id;
 						break;
 					}
 				}
@@ -199,7 +200,7 @@ static void rx_tcp_start()
 	}
 }
 
-static void tx_core(std::size_t server_ind, std::size_t client_ind, std::size_t port_ind, std::size_t link_ind)
+static void tx_core(std::size_t server_id, std::size_t client_id, std::size_t port_id, std::size_t link_id)
 {
 	char * packet = new char[8 + config.pack_len() - config.pack_len() % 8];
 	int local_pack_cnt{ 0 };
@@ -208,23 +209,27 @@ static void tx_core(std::size_t server_ind, std::size_t client_ind, std::size_t 
 
 	int ret;
 	do {
-		ret = connection[link_ind].create(
+		ret = connection[link_id].create(
 			config.protocol() == speed_test_config_t::ip_protocol_t::tcp ? ip_protocol_t::tcp : ip_protocol_t::udp,
-			config.server(server_ind).client(client_ind).ip_address());
+			config.server(server_id).client(client_id).ip_address());
 
 		if (ret != 0)
+		{
 			printf("%lluth port of %lluth client of %lluth server: 'create' method failed! (Error Code: %d) \n",
-				port_ind + 1, client_ind + 1, server_ind + 1, ret);
+				port_id + 1, client_id + 1, server_id + 1, ret);
+		}
 		else
 		{
-			ret = connection[link_ind].connect(config.server(server_ind).ip_address(), (uint16_t)config.server(server_ind).port());
+			ret = connection[link_id].connect(config.server(server_id).ip_address(), (uint16_t)config.server(server_id).port());
 
 			if (ret != 0)
+			{
 				printf("%lluth port of %lluth client of %lluth server: 'connect' method failed! (Error Code: %d) \n",
-					port_ind + 1, client_ind + 1, server_ind + 1, ret);
+					port_id + 1, client_id + 1, server_id + 1, ret);
+			}
 			else
 			{
-				if (connection_cnt.fetch_add(1) + 1 == (int)n_socket)
+				if (connection_cnt.fetch_add(1) + 1 == (int)n_connection)
 					ready.set();
 
 				start.wait();
@@ -232,14 +237,14 @@ static void tx_core(std::size_t server_ind, std::size_t client_ind, std::size_t 
 			}
 		}
 
-		std::this_thread::sleep_for(milliseconds(750));
+		std::this_thread::sleep_for(750ms);
 	} while (true);
 
 	while (keep_on)
 	{
 		*(int32_t*)packet = (local_pack_cnt > (1 << 30) ? local_pack_cnt = 0 : local_pack_cnt)++;
 
-		ret = connection[link_ind].send(packet, (int)config.pack_len());
+		ret = connection[link_id].send(packet, (int)config.pack_len());
 		if (ret != 0)
 		{
 			printf("packet %d send failed! (Error Code: %d) \n", local_pack_cnt - 1, ret);
@@ -253,9 +258,9 @@ static void tx_core(std::size_t server_ind, std::size_t client_ind, std::size_t 
 	delete[] packet;
 }
 
-static void rx_core(socket_t & link, std::size_t server_ind, std::size_t client_ind, std::size_t port_ind, std::size_t link_ind)
+static void rx_core(socket_t & link, std::size_t server_id, std::size_t client_id, std::size_t port_id, std::size_t link_id)
 {
-	(void)link_ind;
+	(void)link_id;
 	char * packet = new char[8 + config.pack_len() - config.pack_len() % 8];
 	int32_t local_pack_cnt{ 0 };
 	int ret{ 0 };
@@ -263,25 +268,23 @@ static void rx_core(socket_t & link, std::size_t server_ind, std::size_t client_
 	if (config.protocol() == speed_test_config_t::ip_protocol_t::udp)
 	{
 		do {
-			ret = link.create(ip_protocol_t::udp, config.server(server_ind).ip_address(),
-				config.server(server_ind).port());
+			ret = link.create(ip_protocol_t::udp, config.server(server_id).ip_address(),
+				config.server(server_id).port());
 
 			if (ret == 0)
 				break;
 
 			printf("%lluth port of %lluth client of %lluth server: 'create' method failed! (Error Code: %d) \n",
-				port_ind + 1, client_ind + 1, server_ind + 1, ret);
+				port_id + 1, client_id + 1, server_id + 1, ret);
 
-			std::this_thread::sleep_for(milliseconds(750));
+			std::this_thread::sleep_for(750ms);
 		} while (true);
 	}
 
 	if (ret == 0)
 	{
-		if (connection_cnt.fetch_add(1) + 1 == n_socket)
-		{
+		if (connection_cnt.fetch_add(1) + 1 == n_connection)
 			ready.set();
-		}
 
 		start.wait();
 	}
@@ -292,7 +295,7 @@ static void rx_core(socket_t & link, std::size_t server_ind, std::size_t client_
 		if (ret != 0)
 		{
 			printf("%lluth server, %lluth client, %lluth port receive failed! (Error Code: %d) \n",
-				server_ind + 1, client_ind + 1, port_ind + 1, ret);
+				server_id + 1, client_id + 1, port_id + 1, ret);
 			keep_on = false;
 			break;
 		}
@@ -303,7 +306,7 @@ static void rx_core(socket_t & link, std::size_t server_ind, std::size_t client_
 		{
 			if (*(int32_t*)packet != (local_pack_cnt > (1 << 30) ? local_pack_cnt = 0 : local_pack_cnt)++)
 			{
-				printf("%lluth server %dth packet corrupted! \n", server_ind + 1, local_pack_cnt - 1);
+				printf("%lluth server %dth packet corrupted! \n", server_id + 1, local_pack_cnt - 1);
 				keep_on = false;
 				break;
 			}
@@ -313,13 +316,13 @@ static void rx_core(socket_t & link, std::size_t server_ind, std::size_t client_
 	delete[] packet;
 }
 
-static bool get_client_ind(const socket_t & link, const std::size_t server_ind, std::size_t & client_ind)
+static bool get_client_id(const socket_t & link, const std::size_t server_id, std::size_t & client_id)
 {
-	For(i, config.server(server_ind).client_count())
+	For(cli_id, config.server(server_id).client_count())
 	{
-		if (link.pair_ip() == config.server(server_ind).client(i).ip_address())
+		if (link.pair_ip() == config.server(server_id).client(cli_id).ip_address())
 		{
-			client_ind = i;
+			client_id = cli_id;
 			return true;
 		}
 	}
