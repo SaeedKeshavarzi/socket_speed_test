@@ -220,8 +220,11 @@ static void tx_core(std::size_t server_id, std::size_t client_id, std::size_t po
 		}
 		else
 		{
-			ret = connection[link_id].connect(config.server(server_id).ip_address(), (uint16_t)config.server(server_id).port());
+			uint16_t server_port{ (uint16_t)config.server(server_id).port() };
+			if (config.protocol() == speed_test_config_t::ip_protocol_t::udp)
+				server_port += (uint16_t)port_id;
 
+			ret = connection[link_id].connect(config.server(server_id).ip_address(), server_port);
 			if (ret != 0)
 			{
 				printf("%lluth port of %lluth client of %lluth server: 'connect' method failed! (Error Code: %d) \n",
@@ -269,7 +272,7 @@ static void rx_core(socket_t & link, std::size_t server_id, std::size_t client_i
 	{
 		do {
 			ret = link.create(ip_protocol_t::udp, config.server(server_id).ip_address(),
-				config.server(server_id).port());
+				(uint16_t)(config.server(server_id).port() + port_id));
 
 			if (ret == 0)
 				break;
