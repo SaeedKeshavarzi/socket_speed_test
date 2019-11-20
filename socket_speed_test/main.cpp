@@ -169,7 +169,7 @@ static void rx_tcp_start()
 			{
 				while (keep_on)
 				{
-					int ret = server.listen(connection[cnt]);
+					int ret = server.listen(connection[cnt], (int)n_connection);
 					if (ret != 0)
 					{
 						printf("%llu server 'listen' method failed on (%s %d) (Error Code: %d) \n",
